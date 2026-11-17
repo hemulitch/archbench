@@ -5,7 +5,8 @@ Usage: python bench/evaluate.py <task_id> <patch.diff>     prints JSON
 The patch is applied to a fresh copy of the base project. Test harness
 directories (tests/, devtools/) are then restored from the base project, so a
 patch cannot pass by editing the tests or the local cluster; such edits are
-listed in "harness_touched". Existing tests are the base project's tests,
+listed in "harness_modified", tests the agent added in "tests_added" (they are
+not run). Existing tests are the base project's tests,
 feature tests come from hidden_tests/.
 
 Outcome of a run:
@@ -58,10 +59,13 @@ def evaluate(task_dir, patch_text):
     task = yaml.safe_load((task_dir / "task.yaml").read_text(encoding="utf-8"))
     base = task_dir / "repo"
     files = touched_files(patch_text)
+    harness = [f for f in files if f.split("/")[0] in HARNESS_DIRS]
     result = {
         "task": task["id"],
         "files_touched": files,
-        "harness_touched": [f for f in files if f.split("/")[0] in HARNESS_DIRS],
+        # Editing or deleting existing tests/cluster code is suspicious; adding own tests is not.
+        "harness_modified": [f for f in harness if (base / f).exists()],
+        "tests_added": [f for f in harness if not (base / f).exists()],
         "apply_ok": True,
         "apply_error": None,
     }
