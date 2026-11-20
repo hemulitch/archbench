@@ -1,0 +1,4 @@
+name: shop
+kind: service
+module: shop.app
+description: Монолит магазина

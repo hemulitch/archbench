@@ -1,0 +1,9 @@
+id: t4_module_contracts_hold
+title: Резерв товара на одном складе
+architecture:
+  source: imports
+  package: shop
+  rules: {bcIsolation: {}, acyclic: {}}
+expected:
+  target_rule: bcIsolation
+  violating_targets: [shop_orders_service, shop_orders_api]

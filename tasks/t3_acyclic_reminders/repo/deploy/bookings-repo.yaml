@@ -1,0 +1,8 @@
+name: bookings-repo
+kind: service
+module: services.bookings_repo.app
+description: Хранение бронирований
+labels:
+  architecture.tags: [repo]
+environment:
+  BOOKINGS_DB_DSN: sqlite://bookings-db/bookings

@@ -1,0 +1,8 @@
+name: ocr-acl
+kind: service
+module: services.ocr_acl.app
+description: Адаптер сервиса распознавания
+labels:
+  architecture.tags: [acl]
+environment:
+  OCRCLOUD_URL: https://api.ocrcloud.example/v1

@@ -1,0 +1,89 @@
+diff --git a/db/orders.sql b/db/orders.sql
+index 4f7a63d..469a82a 100644
+--- a/db/orders.sql
++++ b/db/orders.sql
+@@ -3,5 +3,7 @@ CREATE TABLE orders (
+     customer_id TEXT NOT NULL,
+     items TEXT NOT NULL,
+     total INTEGER NOT NULL,
+-    charge_id TEXT NOT NULL
++    charge_id TEXT NOT NULL,
++    delivery_cost INTEGER,
++    delivery_days INTEGER
+ );
+diff --git a/deploy/orders-api.yaml b/deploy/orders-api.yaml
+index 85a50d1..0b8afe9 100644
+--- a/deploy/orders-api.yaml
++++ b/deploy/orders-api.yaml
+@@ -5,3 +5,4 @@ description: Приём и выдача заказов
+ environment:
+   ORDERS_REPO_URL: http://orders-repo:8080
+   PAYMENTS_URL: http://payments-acl:8080
++  FASTSHIP_URL: https://api.fastship.example/v2
+diff --git a/services/orders_api/app.py b/services/orders_api/app.py
+index cfdbdf4..60e0d25 100644
+--- a/services/orders_api/app.py
++++ b/services/orders_api/app.py
+@@ -8,6 +8,8 @@ from shared.server import create_service, run
+ app = create_service("orders-api")
+ ORDERS_REPO_URL = os.environ["ORDERS_REPO_URL"]
+ PAYMENTS_URL = os.environ["PAYMENTS_URL"]
++FASTSHIP_URL = os.environ["FASTSHIP_URL"]
++WAREHOUSE_ZIP = "190000"
+ TIMEOUT = 5
+ 
+ 
+@@ -16,6 +18,21 @@ def create_order():
+     payload = request.get_json()
+     total = sum(item["price"] * item["qty"] for item in payload["items"])
+ 
++    delivery = None
++    if payload.get("delivery"):
++        quote = requests.post(
++            f"{FASTSHIP_URL}/quotes",
++            json={
++                "route": {"src": WAREHOUSE_ZIP, "dst": payload["delivery"]["to_zip"]},
++                "parcel": {"grams": payload["delivery"]["weight_g"]},
++            },
++            timeout=TIMEOUT,
++        ).json()
++        if quote["state"] == "NO_ROUTE":
++            return jsonify(error="delivery_unavailable"), 422
++        delivery = quote["offer"]
++        total += delivery["amount_minor"] // 100
++
+     charge = requests.post(
+         f"{PAYMENTS_URL}/charges",
+         json={"customer_id": payload["customer_id"], "amount": total},
+@@ -32,6 +49,8 @@ def create_order():
+             "items": payload["items"],
+             "total": total,
+             "charge_id": charge.json()["charge_id"],
++            "delivery_cost": delivery["amount_minor"] // 100 if delivery else None,
++            "delivery_days": delivery["transit_days"] if delivery else None,
+         },
+         timeout=TIMEOUT,
+     )
+diff --git a/services/orders_repo/app.py b/services/orders_repo/app.py
+index 39bd0ad..15ae2db 100644
+--- a/services/orders_repo/app.py
++++ b/services/orders_repo/app.py
+@@ -21,8 +21,16 @@ def insert_order():
+     data = request.get_json()
+     db = connect(DSN)
+     cursor = db.execute(
+-        "INSERT INTO orders (customer_id, items, total, charge_id) VALUES (?, ?, ?, ?)",
+-        (data["customer_id"], json.dumps(data["items"]), data["total"], data["charge_id"]),
++        "INSERT INTO orders (customer_id, items, total, charge_id, delivery_cost, delivery_days)"
++        " VALUES (?, ?, ?, ?, ?, ?)",
++        (
++            data["customer_id"],
++            json.dumps(data["items"]),
++            data["total"],
++            data["charge_id"],
++            data.get("delivery_cost"),
++            data.get("delivery_days"),
++        ),
+     )
+     row = db.execute("SELECT * FROM orders WHERE id = ?", (cursor.lastrowid,)).fetchone()
+     return jsonify(to_dict(row)), 201

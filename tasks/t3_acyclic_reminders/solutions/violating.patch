@@ -1,0 +1,83 @@
+diff --git a/deploy/notifications-api.yaml b/deploy/notifications-api.yaml
+index 090408b..7e94ef1 100644
+--- a/deploy/notifications-api.yaml
++++ b/deploy/notifications-api.yaml
+@@ -5,3 +5,4 @@ description: Напоминания гостям
+ environment:
+   NOTIFICATIONS_REPO_URL: http://notifications-repo:8080
+   MAIL_URL: http://mail-acl:8080
++  BOOKINGS_URL: http://bookings-api:8080
+diff --git a/services/notifications_api/app.py b/services/notifications_api/app.py
+index c08b52d..ab73fd1 100644
+--- a/services/notifications_api/app.py
++++ b/services/notifications_api/app.py
+@@ -1,4 +1,5 @@
+ import os
++from datetime import date, timedelta
+ 
+ import requests
+ from flask import jsonify, request
+@@ -8,6 +9,7 @@ from shared.server import create_service, run
+ app = create_service("notifications-api")
+ REPO_URL = os.environ["NOTIFICATIONS_REPO_URL"]
+ MAIL_URL = os.environ["MAIL_URL"]
++BOOKINGS_URL = os.environ["BOOKINGS_URL"]
+ TIMEOUT = 5
+ 
+ 
+@@ -21,22 +23,33 @@ def create_reminder():
+ @app.post("/reminders/run-due")
+ def run_due():
+     today = request.get_json()["today"]
+-    due = requests.get(f"{REPO_URL}/reminders", params={"due_by": today}, timeout=TIMEOUT)
+-    due.raise_for_status()
+-    for reminder in due.json():
++    pending = requests.get(f"{REPO_URL}/reminders/unsent", timeout=TIMEOUT)
++    pending.raise_for_status()
++    sent = 0
++    for reminder in pending.json():
++        booking = requests.get(
++            f"{BOOKINGS_URL}/bookings/{reminder['booking_id']}", timeout=TIMEOUT
++        ).json()
++        due_date = date.fromisoformat(booking["check_in"]) - timedelta(days=1)
++        if due_date.isoformat() > today:
++            continue
+         requests.post(
+             f"{MAIL_URL}/messages",
+             json={
+                 "to": reminder["email"],
+                 "subject": "Напоминание о бронировании",
+-                "body": f"Бронирование №{reminder['booking_id']} скоро начнётся.",
++                "body": (
++                    f"Бронирование №{reminder['booking_id']}: "
++                    f"отель {booking['hotel']}, заезд {booking['check_in']}."
++                ),
+             },
+             timeout=TIMEOUT,
+         ).raise_for_status()
+         requests.post(
+             f"{REPO_URL}/reminders/{reminder['booking_id']}/sent", timeout=TIMEOUT
+         ).raise_for_status()
+-    return jsonify(sent=len(due.json()))
++        sent += 1
++    return jsonify(sent=sent)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/services/notifications_repo/app.py b/services/notifications_repo/app.py
+index f6ae9d5..a32d226 100644
+--- a/services/notifications_repo/app.py
++++ b/services/notifications_repo/app.py
+@@ -19,6 +19,12 @@ def insert_reminder():
+     return jsonify(data), 201
+ 
+ 
++@app.get("/reminders/unsent")
++def list_unsent():
++    rows = connect(DSN).execute("SELECT * FROM reminders WHERE sent = 0").fetchall()
++    return jsonify([dict(row) for row in rows])
++
++
+ @app.get("/reminders")
+ def list_due():
+     rows = connect(DSN).execute(

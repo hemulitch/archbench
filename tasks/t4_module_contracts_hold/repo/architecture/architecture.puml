@@ -1,0 +1,13 @@
+@startuml
+!include <C4/C4_Component>
+title Shop
+Component(orders, "Orders")
+Component(inventory_contracts, "Inventory Contracts")
+Component(inventory_internal, "Inventory Internal")
+Component(catalog_contracts, "Catalog Contracts")
+Component(catalog_internal, "Catalog Internal")
+Rel(orders, inventory_contracts, "резервирует остаток")
+Rel(orders, catalog_contracts, "узнаёт цену")
+Rel(inventory_contracts, inventory_internal, "использует")
+Rel(catalog_contracts, catalog_internal, "использует")
+@enduml

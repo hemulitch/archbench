@@ -1,0 +1,162 @@
+diff --git a/architecture/architecture.puml b/architecture/architecture.puml
+index 92196a2..12770b2 100644
+--- a/architecture/architecture.puml
++++ b/architecture/architecture.puml
+@@ -6,8 +6,12 @@ Container(orders_repo, "Orders Repo", "Flask", $tags="repo")
+ ContainerDb(orders_db, "Orders DB", "SQLite")
+ Container(payments_acl, "Payments ACL", "Flask", $tags="acl")
+ System_Ext(api_paygate_example, "PayGate")
++Container(fastship_acl, "FastShip ACL", "Flask", $tags="acl")
++System_Ext(api_fastship_example, "FastShip")
+ Rel(orders_api, orders_repo, "сохраняет заказ", "HTTP")
+ Rel(orders_api, payments_acl, "списывает оплату", "HTTP")
+ Rel(orders_repo, orders_db, "читает и пишет")
+ Rel(payments_acl, api_paygate_example, "создаёт платёж", "HTTPS")
++Rel(orders_api, fastship_acl, "запрашивает тариф", "HTTP")
++Rel(fastship_acl, api_fastship_example, "получает тариф", "HTTPS")
+ @enduml
+diff --git a/db/orders.sql b/db/orders.sql
+index 4f7a63d..469a82a 100644
+--- a/db/orders.sql
++++ b/db/orders.sql
+@@ -3,5 +3,7 @@ CREATE TABLE orders (
+     customer_id TEXT NOT NULL,
+     items TEXT NOT NULL,
+     total INTEGER NOT NULL,
+-    charge_id TEXT NOT NULL
++    charge_id TEXT NOT NULL,
++    delivery_cost INTEGER,
++    delivery_days INTEGER
+ );
+diff --git a/deploy/fastship-acl.yaml b/deploy/fastship-acl.yaml
+new file mode 100644
+index 0000000..e6e7cdd
+--- /dev/null
++++ b/deploy/fastship-acl.yaml
+@@ -0,0 +1,8 @@
++name: fastship-acl
++kind: service
++module: services.fastship_acl.app
++description: Адаптер перевозчика FastShip
++labels:
++  architecture.tags: [acl]
++environment:
++  FASTSHIP_URL: https://api.fastship.example/v2
+diff --git a/deploy/orders-api.yaml b/deploy/orders-api.yaml
+index 85a50d1..71da0ff 100644
+--- a/deploy/orders-api.yaml
++++ b/deploy/orders-api.yaml
+@@ -5,3 +5,4 @@ description: Приём и выдача заказов
+ environment:
+   ORDERS_REPO_URL: http://orders-repo:8080
+   PAYMENTS_URL: http://payments-acl:8080
++  DELIVERY_URL: http://fastship-acl:8080
+diff --git a/services/fastship_acl/__init__.py b/services/fastship_acl/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/services/fastship_acl/app.py b/services/fastship_acl/app.py
+new file mode 100644
+index 0000000..ea210d6
+--- /dev/null
++++ b/services/fastship_acl/app.py
+@@ -0,0 +1,33 @@
++"""Translates between our delivery quote model and FastShip's."""
++import os
++
++import requests
++from flask import jsonify, request
++
++from shared.server import create_service, run
++
++app = create_service("fastship-acl")
++FASTSHIP_URL = os.environ["FASTSHIP_URL"]
++WAREHOUSE_ZIP = "190000"
++
++
++@app.post("/quotes")
++def quote():
++    data = request.get_json()
++    response = requests.post(
++        f"{FASTSHIP_URL}/quotes",
++        json={
++            "route": {"src": WAREHOUSE_ZIP, "dst": data["to_zip"]},
++            "parcel": {"grams": data["weight_g"]},
++        },
++        timeout=5,
++    )
++    response.raise_for_status()
++    body = response.json()
++    if body["state"] == "NO_ROUTE":
++        return jsonify(error="no_route"), 422
++    return jsonify(cost=body["offer"]["amount_minor"] // 100, days=body["offer"]["transit_days"])
++
++
++if __name__ == "__main__":
++    run(app)
+diff --git a/services/orders_api/app.py b/services/orders_api/app.py
+index cfdbdf4..9f7f3da 100644
+--- a/services/orders_api/app.py
++++ b/services/orders_api/app.py
+@@ -8,6 +8,7 @@ from shared.server import create_service, run
+ app = create_service("orders-api")
+ ORDERS_REPO_URL = os.environ["ORDERS_REPO_URL"]
+ PAYMENTS_URL = os.environ["PAYMENTS_URL"]
++DELIVERY_URL = os.environ["DELIVERY_URL"]
+ TIMEOUT = 5
+ 
+ 
+@@ -16,6 +17,22 @@ def create_order():
+     payload = request.get_json()
+     total = sum(item["price"] * item["qty"] for item in payload["items"])
+ 
++    delivery = None
++    if payload.get("delivery"):
++        quote = requests.post(
++            f"{DELIVERY_URL}/quotes",
++            json={
++                "to_zip": payload["delivery"]["to_zip"],
++                "weight_g": payload["delivery"]["weight_g"],
++            },
++            timeout=TIMEOUT,
++        )
++        if quote.status_code == 422:
++            return jsonify(error="delivery_unavailable"), 422
++        quote.raise_for_status()
++        delivery = quote.json()
++        total += delivery["cost"]
++
+     charge = requests.post(
+         f"{PAYMENTS_URL}/charges",
+         json={"customer_id": payload["customer_id"], "amount": total},
+@@ -32,6 +49,8 @@ def create_order():
+             "items": payload["items"],
+             "total": total,
+             "charge_id": charge.json()["charge_id"],
++            "delivery_cost": delivery["cost"] if delivery else None,
++            "delivery_days": delivery["days"] if delivery else None,
+         },
+         timeout=TIMEOUT,
+     )
+diff --git a/services/orders_repo/app.py b/services/orders_repo/app.py
+index 39bd0ad..15ae2db 100644
+--- a/services/orders_repo/app.py
++++ b/services/orders_repo/app.py
+@@ -21,8 +21,16 @@ def insert_order():
+     data = request.get_json()
+     db = connect(DSN)
+     cursor = db.execute(
+-        "INSERT INTO orders (customer_id, items, total, charge_id) VALUES (?, ?, ?, ?)",
+-        (data["customer_id"], json.dumps(data["items"]), data["total"], data["charge_id"]),
++        "INSERT INTO orders (customer_id, items, total, charge_id, delivery_cost, delivery_days)"
++        " VALUES (?, ?, ?, ?, ?, ?)",
++        (
++            data["customer_id"],
++            json.dumps(data["items"]),
++            data["total"],
++            data["charge_id"],
++            data.get("delivery_cost"),
++            data.get("delivery_days"),
++        ),
+     )
+     row = db.execute("SELECT * FROM orders WHERE id = ?", (cursor.lastrowid,)).fetchone()
+     return jsonify(to_dict(row)), 201

@@ -1,0 +1,5 @@
+CREATE TABLE documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    text TEXT NOT NULL
+);

@@ -1,0 +1,8 @@
+name: orders-repo
+kind: service
+module: services.orders_repo.app
+description: Хранение заказов
+labels:
+  architecture.tags: [repo]
+environment:
+  ORDERS_DB_DSN: sqlite://orders-db/orders

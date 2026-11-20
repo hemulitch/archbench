@@ -1,0 +1,54 @@
+diff --git a/services/loyalty_api/app.py b/services/loyalty_api/app.py
+index 15be405..dacab1a 100644
+--- a/services/loyalty_api/app.py
++++ b/services/loyalty_api/app.py
+@@ -9,6 +9,7 @@ app = create_service("loyalty-api")
+ REPO_URL = os.environ["LOYALTY_REPO_URL"]
+ CUSTOMERS_URL = os.environ["CUSTOMERS_URL"]
+ POINTS_DIVISOR = 10
++MONTHLY_CAPS = {"basic": 1000, "silver": 3000, "gold": 10000}
+ 
+ 
+ @app.post("/accruals")
+@@ -27,6 +28,7 @@ def accrue():
+             "customer_id": data["customer_id"],
+             "month": data["occurred_at"][:7],
+             "points": data["purchase_amount"] // POINTS_DIVISOR,
++            "monthly_cap": MONTHLY_CAPS[customer.json()["tier"]],
+         },
+         timeout=10,
+     )
+diff --git a/services/loyalty_repo/app.py b/services/loyalty_repo/app.py
+index dd4333c..1839bde 100644
+--- a/services/loyalty_repo/app.py
++++ b/services/loyalty_repo/app.py
+@@ -12,11 +12,24 @@ DSN = os.environ["LOYALTY_DB_DSN"]
+ @app.post("/ledger")
+ def add_entry():
+     data = request.get_json()
+-    connect(DSN).execute(
+-        "INSERT INTO ledger (customer_id, month, points) VALUES (?, ?, ?)",
+-        (data["customer_id"], data["month"], data["points"]),
+-    )
+-    return jsonify(accepted_points=data["points"]), 201
++    db = connect(DSN)
++    db.execute("BEGIN IMMEDIATE")
++    try:
++        used = db.execute(
++            "SELECT COALESCE(SUM(points), 0) AS points FROM ledger"
++            " WHERE customer_id = ? AND month = ?",
++            (data["customer_id"], data["month"]),
++        ).fetchone()["points"]
++        accepted = min(data["points"], max(data["monthly_cap"] - used, 0))
++        db.execute(
++            "INSERT INTO ledger (customer_id, month, points) VALUES (?, ?, ?)",
++            (data["customer_id"], data["month"], accepted),
++        )
++        db.execute("COMMIT")
++    except Exception:
++        db.execute("ROLLBACK")
++        raise
++    return jsonify(accepted_points=accepted, rejected_points=data["points"] - accepted), 201
+ 
+ 
+ @app.get("/balance/<customer_id>")

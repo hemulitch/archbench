@@ -1,0 +1,8 @@
+name: loyalty-repo
+kind: service
+module: services.loyalty_repo.app
+description: Журнал начислений
+labels:
+  architecture.tags: [repo]
+environment:
+  LOYALTY_DB_DSN: sqlite://loyalty-db/loyalty

@@ -1,0 +1,8 @@
+id: t2_passive_repo_cap
+title: Месячный лимит баллов по уровню клиента
+architecture:
+  source: config
+  rules: {acl: {}, crud: {}, dbPerService: {}, acyclic: {}}
+expected:
+  target_rule: crud
+  violating_targets: [loyalty_repo]

@@ -1,0 +1,7 @@
+name: ingest-api
+kind: service
+module: services.ingest_api.app
+description: Приём документов
+environment:
+  DOCS_REPO_URL: http://docs-repo:8080
+  OCR_URL: http://ocr-acl:8080

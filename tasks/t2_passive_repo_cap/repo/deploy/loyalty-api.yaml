@@ -1,0 +1,7 @@
+name: loyalty-api
+kind: service
+module: services.loyalty_api.app
+description: Правила начисления баллов
+environment:
+  LOYALTY_REPO_URL: http://loyalty-repo:8080
+  CUSTOMERS_URL: http://customers-api:8080

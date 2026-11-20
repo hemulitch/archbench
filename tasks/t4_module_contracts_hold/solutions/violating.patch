@@ -1,0 +1,74 @@
+diff --git a/shop/orders/api.py b/shop/orders/api.py
+index 1ba41e7..795f461 100644
+--- a/shop/orders/api.py
++++ b/shop/orders/api.py
+@@ -1,6 +1,7 @@
+ from flask import Blueprint, jsonify, request
+ 
+ from shop.inventory.contracts import OutOfStock
++from shop.orders.service import NoSingleWarehouse
+ from shop.orders.service import ORDERS, place_order
+ 
+ orders_api = Blueprint("orders", __name__)
+@@ -10,9 +11,13 @@ orders_api = Blueprint("orders", __name__)
+ def create_order():
+     data = request.get_json()
+     try:
+-        order = place_order(data["customer_id"], data["sku"], data["qty"])
++        order = place_order(
++            data["customer_id"], data["sku"], data["qty"], data.get("hold_minutes")
++        )
+     except OutOfStock:
+         return jsonify(error="out_of_stock"), 409
++    except NoSingleWarehouse:
++        return jsonify(error="no_single_warehouse"), 409
+     return jsonify(order), 201
+ 
+ 
+diff --git a/shop/orders/service.py b/shop/orders/service.py
+index 6b9aad1..ee27859 100644
+--- a/shop/orders/service.py
++++ b/shop/orders/service.py
+@@ -2,13 +2,32 @@ from itertools import count
+ 
+ from shop.catalog.contracts import price_of
+ from shop.inventory.contracts import reserve
++from shop.inventory.internal.reservations import BOOK
++from shop.inventory.internal.stock import LEDGER
+ 
+ _ids = count(1)
+ ORDERS = {}
+ 
+ 
+-def place_order(customer_id, sku, qty):
+-    reserve(sku, qty)
++class NoSingleWarehouse(Exception):
++    pass
++
++
++def _hold(sku, qty, minutes):
++    with LEDGER.lock:
++        levels = LEDGER.by_warehouse(sku)
++        warehouse = max(levels, key=levels.get, default=None)
++        if warehouse is None or levels[warehouse] < qty:
++            raise NoSingleWarehouse(sku)
++        return BOOK.hold(sku, qty, warehouse, minutes)
++
++
++def place_order(customer_id, sku, qty, hold_minutes=None):
++    reservation = None
++    if hold_minutes is None:
++        reserve(sku, qty)
++    else:
++        reservation = _hold(sku, qty, hold_minutes)
+     order = {
+         "id": next(_ids),
+         "customer_id": customer_id,
+@@ -16,5 +35,7 @@ def place_order(customer_id, sku, qty):
+         "qty": qty,
+         "total": price_of(sku) * qty,
+     }
++    if reservation:
++        order["reservation"] = reservation
+     ORDERS[order["id"]] = order
+     return order

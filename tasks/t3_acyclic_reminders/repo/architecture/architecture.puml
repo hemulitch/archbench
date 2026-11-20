@@ -1,0 +1,19 @@
+@startuml
+!include <C4/C4_Container>
+title Bookings
+Container(bookings_api, "Bookings API", "Flask")
+Container(bookings_repo, "Bookings Repo", "Flask", $tags="repo")
+ContainerDb(bookings_db, "Bookings DB", "SQLite")
+Container(notifications_api, "Notifications API", "Flask")
+Container(notifications_repo, "Notifications Repo", "Flask", $tags="repo")
+ContainerDb(notifications_db, "Notifications DB", "SQLite")
+Container(mail_acl, "Mail ACL", "Flask", $tags="acl")
+System_Ext(api_mailer_example, "Mailer")
+Rel(bookings_api, bookings_repo, "хранит бронирования", "HTTP")
+Rel(bookings_api, notifications_api, "заводит напоминание", "HTTP")
+Rel(bookings_repo, bookings_db, "читает и пишет")
+Rel(notifications_api, notifications_repo, "хранит напоминания", "HTTP")
+Rel(notifications_api, mail_acl, "отправляет письмо", "HTTP")
+Rel(notifications_repo, notifications_db, "читает и пишет")
+Rel(mail_acl, api_mailer_example, "отправляет письмо", "HTTPS")
+@enduml

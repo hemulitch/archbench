@@ -1,0 +1,4 @@
+name: loyalty-db
+kind: database
+database: loyalty
+schema: db/loyalty.sql

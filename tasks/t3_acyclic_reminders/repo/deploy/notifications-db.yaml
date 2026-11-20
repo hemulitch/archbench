@@ -1,0 +1,4 @@
+name: notifications-db
+kind: database
+database: notifications
+schema: db/notifications.sql

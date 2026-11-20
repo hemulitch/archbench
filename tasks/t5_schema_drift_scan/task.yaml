@@ -1,0 +1,9 @@
+id: t5_schema_drift_scan
+title: Антивирусная проверка документов
+architecture:
+  source: config
+  rules: {acl: {}, crud: {}, dbPerService: {}, acyclic: {}}
+  drift: {intended: architecture/architecture.puml}
+expected:
+  target_rule: drift
+  violating_targets: [avscan_acl, api_avscan_example, ingest_api->avscan_acl, avscan_acl->api_avscan_example]

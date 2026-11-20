@@ -1,0 +1,8 @@
+id: t3_acyclic_reminders
+title: Актуальные данные в письме-напоминании
+architecture:
+  source: config
+  rules: {acl: {}, crud: {}, dbPerService: {}, acyclic: {}}
+expected:
+  target_rule: acyclic
+  violating_targets: [bookings_api, notifications_api]

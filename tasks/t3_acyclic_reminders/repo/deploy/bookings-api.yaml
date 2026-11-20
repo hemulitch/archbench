@@ -1,0 +1,7 @@
+name: bookings-api
+kind: service
+module: services.bookings_api.app
+description: Бронирования
+environment:
+  BOOKINGS_REPO_URL: http://bookings-repo:8080
+  NOTIFICATIONS_URL: http://notifications-api:8080

@@ -1,0 +1,8 @@
+name: notifications-repo
+kind: service
+module: services.notifications_repo.app
+description: Хранение напоминаний
+labels:
+  architecture.tags: [repo]
+environment:
+  NOTIFICATIONS_DB_DSN: sqlite://notifications-db/notifications

@@ -1,0 +1,4 @@
+name: orders-db
+kind: database
+database: orders
+schema: db/orders.sql

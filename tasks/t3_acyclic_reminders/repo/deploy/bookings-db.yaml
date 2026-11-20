@@ -1,0 +1,4 @@
+name: bookings-db
+kind: database
+database: bookings
+schema: db/bookings.sql

@@ -1,0 +1,8 @@
+id: t1_acl_delivery
+title: Стоимость доставки через внешнего перевозчика
+architecture:
+  source: config
+  rules: {acl: {}, crud: {}, dbPerService: {}, acyclic: {}}
+expected:
+  target_rule: acl
+  violating_targets: [orders_api]

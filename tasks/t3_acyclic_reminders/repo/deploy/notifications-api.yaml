@@ -1,0 +1,7 @@
+name: notifications-api
+kind: service
+module: services.notifications_api.app
+description: Напоминания гостям
+environment:
+  NOTIFICATIONS_REPO_URL: http://notifications-repo:8080
+  MAIL_URL: http://mail-acl:8080

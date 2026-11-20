@@ -1,0 +1,8 @@
+{
+  "name": "archbench",
+  "private": true,
+  "devDependencies": {
+    "aact": "3.0.1",
+    "tsx": "^4.19.0"
+  }
+}

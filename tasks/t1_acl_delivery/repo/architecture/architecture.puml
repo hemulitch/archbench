@@ -1,0 +1,13 @@
+@startuml
+!include <C4/C4_Container>
+title Marketplace Orders
+Container(orders_api, "Orders API", "Flask")
+Container(orders_repo, "Orders Repo", "Flask", $tags="repo")
+ContainerDb(orders_db, "Orders DB", "SQLite")
+Container(payments_acl, "Payments ACL", "Flask", $tags="acl")
+System_Ext(api_paygate_example, "PayGate")
+Rel(orders_api, orders_repo, "сохраняет заказ", "HTTP")
+Rel(orders_api, payments_acl, "списывает оплату", "HTTP")
+Rel(orders_repo, orders_db, "читает и пишет")
+Rel(payments_acl, api_paygate_example, "создаёт платёж", "HTTPS")
+@enduml

@@ -1,0 +1,8 @@
+name: mail-acl
+kind: service
+module: services.mail_acl.app
+description: Адаптер почтового провайдера
+labels:
+  architecture.tags: [acl]
+environment:
+  MAILER_URL: https://api.mailer.example/v3

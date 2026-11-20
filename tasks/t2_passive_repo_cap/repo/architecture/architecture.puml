@@ -1,0 +1,11 @@
+@startuml
+!include <C4/C4_Container>
+title Loyalty
+Container(loyalty_api, "Loyalty API", "Flask")
+Container(loyalty_repo, "Loyalty Repo", "Flask", $tags="repo")
+ContainerDb(loyalty_db, "Loyalty DB", "SQLite")
+Container(customers_api, "Customers API", "Flask")
+Rel(loyalty_api, loyalty_repo, "ведёт журнал", "HTTP")
+Rel(loyalty_api, customers_api, "читает профиль", "HTTP")
+Rel(loyalty_repo, loyalty_db, "читает и пишет")
+@enduml

@@ -1,0 +1,7 @@
+name: orders-api
+kind: service
+module: services.orders_api.app
+description: Приём и выдача заказов
+environment:
+  ORDERS_REPO_URL: http://orders-repo:8080
+  PAYMENTS_URL: http://payments-acl:8080

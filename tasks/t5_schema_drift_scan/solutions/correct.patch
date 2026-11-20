@@ -1,0 +1,98 @@
+diff --git a/architecture/architecture.puml b/architecture/architecture.puml
+index b94e764..3d5b8cd 100644
+--- a/architecture/architecture.puml
++++ b/architecture/architecture.puml
+@@ -6,8 +6,12 @@ Container(docs_repo, "Docs Repo", "Flask", $tags="repo")
+ ContainerDb(docs_db, "Docs DB", "SQLite")
+ Container(ocr_acl, "OCR ACL", "Flask", $tags="acl")
+ System_Ext(api_ocrcloud_example, "OCRCloud")
++Container(avscan_acl, "AVScan ACL", "Flask", $tags="acl")
++System_Ext(api_avscan_example, "AVScan")
+ Rel(ingest_api, docs_repo, "сохраняет документ", "HTTP")
+ Rel(ingest_api, ocr_acl, "распознаёт текст", "HTTP")
+ Rel(docs_repo, docs_db, "читает и пишет")
+ Rel(ocr_acl, api_ocrcloud_example, "распознаёт текст", "HTTPS")
++Rel(ingest_api, avscan_acl, "проверяет файл", "HTTP")
++Rel(avscan_acl, api_avscan_example, "проверяет файл", "HTTPS")
+ @enduml
+diff --git a/deploy/avscan-acl.yaml b/deploy/avscan-acl.yaml
+new file mode 100644
+index 0000000..be38afc
+--- /dev/null
++++ b/deploy/avscan-acl.yaml
+@@ -0,0 +1,8 @@
++name: avscan-acl
++kind: service
++module: services.avscan_acl.app
++description: Адаптер антивируса AVScan
++labels:
++  architecture.tags: [acl]
++environment:
++  AVSCAN_URL: https://api.avscan.example/v2
+diff --git a/deploy/ingest-api.yaml b/deploy/ingest-api.yaml
+index 451967a..a60c3d8 100644
+--- a/deploy/ingest-api.yaml
++++ b/deploy/ingest-api.yaml
+@@ -5,3 +5,4 @@ description: Приём документов
+ environment:
+   DOCS_REPO_URL: http://docs-repo:8080
+   OCR_URL: http://ocr-acl:8080
++  SCANNER_URL: http://avscan-acl:8080
+diff --git a/services/avscan_acl/__init__.py b/services/avscan_acl/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/services/avscan_acl/app.py b/services/avscan_acl/app.py
+new file mode 100644
+index 0000000..f8be6c3
+--- /dev/null
++++ b/services/avscan_acl/app.py
+@@ -0,0 +1,24 @@
++"""Translates between our scan model and AVScan's."""
++import os
++
++import requests
++from flask import jsonify, request
++
++from shared.server import create_service, run
++
++app = create_service("avscan-acl")
++AVSCAN_URL = os.environ["AVSCAN_URL"]
++
++
++@app.post("/scans")
++def scan():
++    response = requests.post(
++        f"{AVSCAN_URL}/scans", json={"payload": request.get_json()["content"]}, timeout=5
++    )
++    response.raise_for_status()
++    body = response.json()
++    return jsonify(clean=body["verdict"] == "CLEAN", threat=body.get("signature"))
++
++
++if __name__ == "__main__":
++    run(app)
+diff --git a/services/ingest_api/app.py b/services/ingest_api/app.py
+index 52b3f90..1eddfe4 100644
+--- a/services/ingest_api/app.py
++++ b/services/ingest_api/app.py
+@@ -8,12 +8,20 @@ from shared.server import create_service, run
+ app = create_service("ingest-api")
+ DOCS_REPO_URL = os.environ["DOCS_REPO_URL"]
+ OCR_URL = os.environ["OCR_URL"]
++SCANNER_URL = os.environ["SCANNER_URL"]
+ TIMEOUT = 5
+ 
+ 
+ @app.post("/documents")
+ def upload():
+     data = request.get_json()
++    scan = requests.post(
++        f"{SCANNER_URL}/scans", json={"content": data["content"]}, timeout=TIMEOUT
++    )
++    scan.raise_for_status()
++    if not scan.json()["clean"]:
++        return jsonify(error="infected", threat=scan.json()["threat"]), 422
++
+     recognized = requests.post(
+         f"{OCR_URL}/recognize", json={"content": data["content"]}, timeout=TIMEOUT
+     )

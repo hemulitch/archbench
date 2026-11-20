@@ -1,0 +1,58 @@
+diff --git a/deploy/loyalty-repo.yaml b/deploy/loyalty-repo.yaml
+index 4fb1e7e..b3681f0 100644
+--- a/deploy/loyalty-repo.yaml
++++ b/deploy/loyalty-repo.yaml
+@@ -6,3 +6,4 @@ labels:
+   architecture.tags: [repo]
+ environment:
+   LOYALTY_DB_DSN: sqlite://loyalty-db/loyalty
++  CUSTOMERS_URL: http://customers-api:8080
+diff --git a/services/loyalty_repo/app.py b/services/loyalty_repo/app.py
+index dd4333c..537ae91 100644
+--- a/services/loyalty_repo/app.py
++++ b/services/loyalty_repo/app.py
+@@ -1,5 +1,6 @@
+ import os
+ 
++import requests
+ from flask import jsonify, request
+ 
+ from shared.db import connect
+@@ -7,16 +8,32 @@ from shared.server import create_service, run
+ 
+ app = create_service("loyalty-repo")
+ DSN = os.environ["LOYALTY_DB_DSN"]
++CUSTOMERS_URL = os.environ["CUSTOMERS_URL"]
++MONTHLY_CAPS = {"basic": 1000, "silver": 3000, "gold": 10000}
+ 
+ 
+ @app.post("/ledger")
+ def add_entry():
+     data = request.get_json()
+-    connect(DSN).execute(
+-        "INSERT INTO ledger (customer_id, month, points) VALUES (?, ?, ?)",
+-        (data["customer_id"], data["month"], data["points"]),
+-    )
+-    return jsonify(accepted_points=data["points"]), 201
++    tier = requests.get(f"{CUSTOMERS_URL}/customers/{data['customer_id']}", timeout=5).json()["tier"]
++    db = connect(DSN)
++    db.execute("BEGIN IMMEDIATE")
++    try:
++        used = db.execute(
++            "SELECT COALESCE(SUM(points), 0) AS points FROM ledger"
++            " WHERE customer_id = ? AND month = ?",
++            (data["customer_id"], data["month"]),
++        ).fetchone()["points"]
++        accepted = min(data["points"], max(MONTHLY_CAPS[tier] - used, 0))
++        db.execute(
++            "INSERT INTO ledger (customer_id, month, points) VALUES (?, ?, ?)",
++            (data["customer_id"], data["month"], accepted),
++        )
++        db.execute("COMMIT")
++    except Exception:
++        db.execute("ROLLBACK")
++        raise
++    return jsonify(accepted_points=accepted, rejected_points=data["points"] - accepted), 201
+ 
+ 
+ @app.get("/balance/<customer_id>")

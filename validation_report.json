@@ -1,0 +1,284 @@
+[
+  {
+    "id": "t1_acl_delivery",
+    "variants": {
+      "base": {
+        "existing_passed": "2/2",
+        "feature_passed": "0/4",
+        "failed_tests": [
+          "test_feature::test_delivery_is_added_to_total_and_charge",
+          "test_feature::test_quote_request_follows_carrier_format",
+          "test_feature::test_delivery_is_persisted",
+          "test_feature::test_no_route_rejects_without_charge"
+        ],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "correct": {
+        "existing_passed": "2/2",
+        "feature_passed": "4/4",
+        "failed_tests": [],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "violating": {
+        "existing_passed": "2/2",
+        "feature_passed": "4/4",
+        "failed_tests": [],
+        "architecture": {
+          "status": "violation",
+          "violations": {
+            "acl": [
+              {
+                "target": "orders_api",
+                "targetKind": "element",
+                "message": "calls external system api_fastship_example without an ACL layer"
+              }
+            ]
+          },
+          "issues": []
+        },
+        "problems": []
+      }
+    },
+    "diagram_matches_base": true
+  },
+  {
+    "id": "t2_passive_repo_cap",
+    "variants": {
+      "base": {
+        "existing_passed": "3/3",
+        "feature_passed": "0/7",
+        "failed_tests": [
+          "test_feature::test_within_cap_reports_zero_rejected",
+          "test_feature::test_accrual_is_truncated_to_tier_cap[c1-1000]",
+          "test_feature::test_accrual_is_truncated_to_tier_cap[c2-3000]",
+          "test_feature::test_accrual_is_truncated_to_tier_cap[c3-10000]",
+          "test_feature::test_exhausted_cap_accepts_zero",
+          "test_feature::test_cap_is_per_calendar_month",
+          "test_feature::test_concurrent_accruals_never_exceed_cap"
+        ],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "correct": {
+        "existing_passed": "3/3",
+        "feature_passed": "7/7",
+        "failed_tests": [],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "violating": {
+        "existing_passed": "3/3",
+        "feature_passed": "7/7",
+        "failed_tests": [],
+        "architecture": {
+          "status": "violation",
+          "violations": {
+            "crud": [
+              {
+                "target": "loyalty_repo",
+                "targetKind": "element",
+                "message": "repo has non-database dependencies: customers_api — repos should only access databases"
+              }
+            ]
+          },
+          "issues": []
+        },
+        "problems": []
+      }
+    },
+    "diagram_matches_base": true
+  },
+  {
+    "id": "t3_acyclic_reminders",
+    "variants": {
+      "base": {
+        "existing_passed": "2/2",
+        "feature_passed": "0/4",
+        "failed_tests": [
+          "test_feature::test_body_names_hotel_and_check_in",
+          "test_feature::test_body_uses_data_changed_after_booking",
+          "test_feature::test_reminder_follows_postponed_check_in",
+          "test_feature::test_reminder_follows_earlier_check_in"
+        ],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "correct": {
+        "existing_passed": "2/2",
+        "feature_passed": "4/4",
+        "failed_tests": [],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "violating": {
+        "existing_passed": "2/2",
+        "feature_passed": "4/4",
+        "failed_tests": [],
+        "architecture": {
+          "status": "violation",
+          "violations": {
+            "acyclic": [
+              {
+                "target": "bookings_api",
+                "targetKind": "element",
+                "message": "participates in a dependency cycle"
+              },
+              {
+                "target": "notifications_api",
+                "targetKind": "element",
+                "message": "participates in a dependency cycle"
+              }
+            ]
+          },
+          "issues": []
+        },
+        "problems": []
+      }
+    },
+    "diagram_matches_base": true
+  },
+  {
+    "id": "t4_module_contracts_hold",
+    "variants": {
+      "base": {
+        "existing_passed": "3/3",
+        "feature_passed": "0/4",
+        "failed_tests": [
+          "test_feature::test_hold_picks_warehouse_with_most_stock",
+          "test_feature::test_stock_reflects_the_hold",
+          "test_feature::test_reservation_is_returned_by_get",
+          "test_feature::test_no_single_warehouse_rejected_without_side_effects"
+        ],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "correct": {
+        "existing_passed": "3/3",
+        "feature_passed": "4/4",
+        "failed_tests": [],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "violating": {
+        "existing_passed": "3/3",
+        "feature_passed": "4/4",
+        "failed_tests": [],
+        "architecture": {
+          "status": "violation",
+          "violations": {
+            "bcIsolation": [
+              {
+                "target": "shop_orders_service",
+                "targetKind": "element",
+                "message": "shop_orders_service (orders) reaches shop_inventory_internal_reservations (inventory) past its contract"
+              },
+              {
+                "target": "shop_orders_service",
+                "targetKind": "element",
+                "message": "shop_orders_service (orders) reaches shop_inventory_internal_stock (inventory) past its contract"
+              }
+            ]
+          },
+          "issues": []
+        },
+        "problems": []
+      }
+    },
+    "diagram_matches_base": null
+  },
+  {
+    "id": "t5_schema_drift_scan",
+    "variants": {
+      "base": {
+        "existing_passed": "1/1",
+        "feature_passed": "0/2",
+        "failed_tests": [
+          "test_feature::test_clean_document_is_scanned_then_processed",
+          "test_feature::test_infected_document_is_rejected"
+        ],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "correct": {
+        "existing_passed": "1/1",
+        "feature_passed": "2/2",
+        "failed_tests": [],
+        "architecture": {
+          "status": "pass",
+          "violations": {},
+          "issues": []
+        },
+        "problems": []
+      },
+      "violating": {
+        "existing_passed": "1/1",
+        "feature_passed": "2/2",
+        "failed_tests": [],
+        "architecture": {
+          "status": "violation",
+          "violations": {
+            "drift": [
+              {
+                "target": "api_avscan_example",
+                "message": "element added"
+              },
+              {
+                "target": "avscan_acl",
+                "message": "element added"
+              },
+              {
+                "target": "avscan_acl->api_avscan_example",
+                "message": "relation added"
+              },
+              {
+                "target": "ingest_api->avscan_acl",
+                "message": "relation added"
+              }
+            ]
+          },
+          "issues": []
+        },
+        "problems": []
+      }
+    },
+    "diagram_matches_base": true
+  }
+]

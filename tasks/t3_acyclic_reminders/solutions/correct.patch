@@ -1,0 +1,123 @@
+diff --git a/db/notifications.sql b/db/notifications.sql
+index eb62398..d16df58 100644
+--- a/db/notifications.sql
++++ b/db/notifications.sql
+@@ -2,5 +2,7 @@ CREATE TABLE reminders (
+     booking_id INTEGER PRIMARY KEY,
+     email TEXT NOT NULL,
+     due_date TEXT NOT NULL,
++    hotel TEXT NOT NULL,
++    check_in TEXT NOT NULL,
+     sent INTEGER NOT NULL DEFAULT 0
+ );
+diff --git a/services/bookings_api/app.py b/services/bookings_api/app.py
+index d9bd5cc..82d6ba6 100644
+--- a/services/bookings_api/app.py
++++ b/services/bookings_api/app.py
+@@ -16,6 +16,15 @@ def reminder_date(check_in):
+     return (date.fromisoformat(check_in) - timedelta(days=1)).isoformat()
+ 
+ 
++def reminder_snapshot(booking):
++    return {
++        "email": booking["guest_email"],
++        "due_date": reminder_date(booking["check_in"]),
++        "hotel": booking["hotel"],
++        "check_in": booking["check_in"],
++    }
++
++
+ @app.post("/bookings")
+ def create_booking():
+     saved = requests.post(f"{REPO_URL}/bookings", json=request.get_json(), timeout=TIMEOUT)
+@@ -23,11 +32,7 @@ def create_booking():
+     booking = saved.json()
+     reminder = requests.post(
+         f"{NOTIFICATIONS_URL}/reminders",
+-        json={
+-            "booking_id": booking["id"],
+-            "email": booking["guest_email"],
+-            "due_date": reminder_date(booking["check_in"]),
+-        },
++        json={"booking_id": booking["id"], **reminder_snapshot(booking)},
+         timeout=TIMEOUT,
+     )
+     reminder.raise_for_status()
+@@ -51,7 +56,13 @@ def change_booking(booking_id):
+     if changed.status_code == 404:
+         return jsonify(error="not_found"), 404
+     changed.raise_for_status()
+-    return jsonify(changed.json())
++    booking = changed.json()
++    requests.put(
++        f"{NOTIFICATIONS_URL}/reminders/{booking_id}",
++        json=reminder_snapshot(booking),
++        timeout=TIMEOUT,
++    ).raise_for_status()
++    return jsonify(booking)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/services/notifications_api/app.py b/services/notifications_api/app.py
+index c08b52d..3e4634d 100644
+--- a/services/notifications_api/app.py
++++ b/services/notifications_api/app.py
+@@ -18,6 +18,15 @@ def create_reminder():
+     return jsonify(saved.json()), 201
+ 
+ 
++@app.put("/reminders/<int:booking_id>")
++def update_reminder(booking_id):
++    saved = requests.put(
++        f"{REPO_URL}/reminders/{booking_id}", json=request.get_json(), timeout=TIMEOUT
++    )
++    saved.raise_for_status()
++    return jsonify(saved.json())
++
++
+ @app.post("/reminders/run-due")
+ def run_due():
+     today = request.get_json()["today"]
+@@ -29,7 +38,10 @@ def run_due():
+             json={
+                 "to": reminder["email"],
+                 "subject": "Напоминание о бронировании",
+-                "body": f"Бронирование №{reminder['booking_id']} скоро начнётся.",
++                "body": (
++                    f"Бронирование №{reminder['booking_id']}: "
++                    f"отель {reminder['hotel']}, заезд {reminder['check_in']}."
++                ),
+             },
+             timeout=TIMEOUT,
+         ).raise_for_status()
+diff --git a/services/notifications_repo/app.py b/services/notifications_repo/app.py
+index f6ae9d5..e262df1 100644
+--- a/services/notifications_repo/app.py
++++ b/services/notifications_repo/app.py
+@@ -13,12 +13,24 @@ DSN = os.environ["NOTIFICATIONS_DB_DSN"]
+ def insert_reminder():
+     data = request.get_json()
+     connect(DSN).execute(
+-        "INSERT INTO reminders (booking_id, email, due_date) VALUES (?, ?, ?)",
+-        (data["booking_id"], data["email"], data["due_date"]),
++        "INSERT INTO reminders (booking_id, email, due_date, hotel, check_in)"
++        " VALUES (?, ?, ?, ?, ?)",
++        (data["booking_id"], data["email"], data["due_date"], data["hotel"], data["check_in"]),
+     )
+     return jsonify(data), 201
+ 
+ 
++@app.put("/reminders/<int:booking_id>")
++def update_reminder(booking_id):
++    data = request.get_json()
++    connect(DSN).execute(
++        "UPDATE reminders SET email = ?, due_date = ?, hotel = ?, check_in = ?, sent = 0"
++        " WHERE booking_id = ?",
++        (data["email"], data["due_date"], data["hotel"], data["check_in"], booking_id),
++    )
++    return jsonify(booking_id=booking_id, **data)
++
++
+ @app.get("/reminders")
+ def list_due():
+     rows = connect(DSN).execute(

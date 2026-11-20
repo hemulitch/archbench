@@ -1,0 +1,8 @@
+name: docs-repo
+kind: service
+module: services.docs_repo.app
+description: Хранение документов
+labels:
+  architecture.tags: [repo]
+environment:
+  DOCS_DB_DSN: sqlite://docs-db/docs

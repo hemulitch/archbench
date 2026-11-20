@@ -1,0 +1,8 @@
+name: payments-acl
+kind: service
+module: services.payments_acl.app
+description: Адаптер платёжного провайдера PayGate
+labels:
+  architecture.tags: [acl]
+environment:
+  PAYGATE_URL: https://api.paygate.example/v1

@@ -1,0 +1,4 @@
+name: docs-db
+kind: database
+database: docs
+schema: db/docs.sql

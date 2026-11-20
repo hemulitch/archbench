@@ -1,0 +1,4 @@
+name: customers-api
+kind: service
+module: services.customers_api.app
+description: Профили клиентов
