@@ -1,0 +1,74 @@
+diff --git a/catalog/catalog.py b/catalog/catalog.py
+--- a/catalog/catalog.py
++++ b/catalog/catalog.py
+@@ -10,7 +10,18 @@
+             version = db.execute("PRAGMA user_version").fetchone()[0]
+             if version == 0:
+                 db.execute("CREATE TABLE products (sku TEXT PRIMARY KEY, title TEXT NOT NULL)")
+-                db.execute("PRAGMA user_version = 1")
++            if version < 2:
++                db.execute(
++                    """CREATE TABLE receipt_captions (
++                        sku TEXT NOT NULL REFERENCES products(sku),
++                        locale TEXT NOT NULL,
++                        caption TEXT NOT NULL,
++                        PRIMARY KEY (sku, locale)
++                    )"""
++                )
++                db.execute("INSERT INTO receipt_captions SELECT sku, '', title FROM products")
++                db.execute("ALTER TABLE products DROP COLUMN title")
++                db.execute("PRAGMA user_version = 2")
+     except Exception:
+         db.close()
+         raise
+@@ -19,13 +30,47 @@
+ 
+ def put(db, sku, title):
+     with db:
++        db.execute("INSERT OR IGNORE INTO products (sku) VALUES (?)", (sku,))
+         db.execute(
+-            """INSERT INTO products (sku, title) VALUES (?, ?)
+-               ON CONFLICT(sku) DO UPDATE SET title = excluded.title""",
++            """INSERT INTO receipt_captions (sku, locale, caption) VALUES (?, '', ?)
++               ON CONFLICT(sku, locale) DO UPDATE SET caption = excluded.caption""",
+             (sku, title),
+         )
+ 
+ 
+ def get(db, sku):
+-    row = db.execute("SELECT sku, title FROM products WHERE sku = ?", (sku,)).fetchone()
++    row = db.execute(
++        "SELECT sku, caption AS title FROM receipt_captions WHERE sku = ? AND locale = ''",
++        (sku,),
++    ).fetchone()
+     return dict(row) if row else None
++
++
++def set_receipt_caption(db, sku, locale, caption):
++    locale = locale.lower()
++    with db:
++        if get(db, sku) is None:
++            return False
++        if caption is None:
++            db.execute("DELETE FROM receipt_captions WHERE sku = ? AND locale = ?", (sku, locale))
++        else:
++            db.execute(
++                """INSERT INTO receipt_captions (sku, locale, caption) VALUES (?, ?, ?)
++                   ON CONFLICT(sku, locale) DO UPDATE SET caption = excluded.caption""",
++                (sku, locale, caption),
++            )
++    return True
++
++
++def receipt_row(db, sku, locale):
++    product = get(db, sku)
++    if product is None:
++        return None
++    locale = locale.lower()
++    language = locale.split("-", 1)[0]
++    row = db.execute(
++        """SELECT caption FROM receipt_captions WHERE sku = ? AND locale IN (?, ?)
++           ORDER BY (locale = ?) DESC LIMIT 1""",
++        (sku, locale, language, locale),
++    ).fetchone()
++    return {"sku": sku, "caption": row["caption"] if row else product["title"]}

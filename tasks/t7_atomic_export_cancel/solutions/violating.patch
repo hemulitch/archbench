@@ -1,0 +1,30 @@
+diff --git a/exports/store.py b/exports/store.py
+--- a/exports/store.py
++++ b/exports/store.py
+@@ -48,3 +48,26 @@
+     return [
+         dict(row) for row in db.execute("SELECT export_id, kind FROM outbox ORDER BY id")
+     ]
++
++
++def _cancel(db, export_id):
++    cursor = db.execute(
++        "UPDATE exports SET status = 'cancelled' WHERE id = ? AND status = 'queued'",
++        (export_id,),
++    )
++    if cursor.rowcount == 0:
++        return False
++    db.execute(
++        "INSERT INTO outbox (export_id, kind) VALUES (?, 'export.cancelled')",
++        (export_id,),
++    )
++    return True
++
++
++def cancel(db, export_id):
++    with db:
++        return _cancel(db, export_id)
++
++
++def cancel_batch(db, export_ids):
++    return [export_id for export_id in export_ids if cancel(db, export_id)]

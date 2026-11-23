@@ -1,0 +1,9 @@
+id: t8_streaming_meter_peaks
+title: Поиск самых мощных замеров в потоке
+architecture:
+  source: scenario
+  rule: boundedWorkingMemory
+  target: metering-summary
+expected:
+  target_rule: boundedWorkingMemory
+  violating_targets: [metering-summary]

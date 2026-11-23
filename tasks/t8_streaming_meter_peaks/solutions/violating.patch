@@ -1,0 +1,19 @@
+diff --git a/metering/summary.py b/metering/summary.py
+--- a/metering/summary.py
++++ b/metering/summary.py
+@@ -16,6 +16,15 @@
+     return {"count": count, "total_watts": total_watts}
+ 
+ 
++def summarize_with_peaks(readings, *, limit=5):
++    if limit < 0:
++        raise ValueError("limit cannot be negative")
++    records = list(readings)
++    report = summarize(records)
++    report["peaks"] = sorted(records, key=lambda row: row["watts"], reverse=True)[:limit]
++    return report
++
++
+ def main(path):
+     with open(path, encoding="utf-8") as source:
+         print(json.dumps(summarize(read_ndjson(source))))
