@@ -47,9 +47,39 @@ def changed_roles(elements, base_root):
     ]
 
 
+def check_scenario(workspace, arch, base_root):
+    """Run a benchmark-owned scenario that returns a JSON list of violations."""
+    try:
+        scenario = (Path(base_root).parent / "arch" / "check.py").resolve(strict=True)
+        done = subprocess.run(
+            [sys.executable, "-I", str(scenario), str(workspace.resolve())],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if done.returncode:
+            detail = done.stderr.strip().splitlines()
+            raise RuntimeError(detail[-1] if detail else f"exit code {done.returncode}")
+        messages = json.loads(done.stdout)
+        if not isinstance(messages, list) or any(
+            not isinstance(message, str) or not message.strip() for message in messages
+        ):
+            raise ValueError("expected a JSON list of nonempty violation messages")
+    except (OSError, TypeError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+        return {"status": "error", "violations": {}, "issues": [f"scenario: {error}"]}
+
+    violations = {
+        arch["rule"]: [{"target": arch["target"], "message": message} for message in messages]
+    } if messages else {}
+    return {"status": "violation" if violations else "pass", "violations": violations, "issues": []}
+
+
 def check(workspace, task, base_root=None):
     arch = task["architecture"]
     workspace = Path(workspace)
+    if arch["source"] == "scenario":
+        return check_scenario(workspace, arch, base_root)
     if arch["source"] == "config":
         elements, issues = extract.config_model(workspace)
         if base_root:

@@ -1,0 +1,9 @@
+id: t6_rolling_catalog
+title: Локализованные подписи в каталоге при поэтапном развёртывании
+architecture:
+  source: scenario
+  rule: rollingSchemaCompatibility
+  target: catalog-schema
+expected:
+  target_rule: rollingSchemaCompatibility
+  violating_targets: [catalog-schema]

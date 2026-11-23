@@ -53,6 +53,33 @@ def test_unmodified_project_passes(task_id, tmp_path):
     assert archcheck.check(workspace, task, base)["status"] == "pass"
 
 
+@pytest.mark.parametrize(
+    ("script", "status"),
+    [
+        ('print("[]")', "pass"),
+        ('print(\'["wrong state"]\')', "violation"),
+        ('print("not JSON")', "error"),
+        ('raise ValueError("broken fixture")', "error"),
+    ],
+)
+def test_scenario_result_distinguishes_violation_from_execution_error(tmp_path, script, status):
+    base = tmp_path / "repo"
+    workspace = tmp_path / "candidate"
+    workspace.mkdir()
+    check_file = tmp_path / "arch" / "check.py"
+    check_file.parent.mkdir()
+    check_file.write_text(script, encoding="utf-8")
+    task = {"architecture": {"source": "scenario", "rule": "state", "target": "store"}}
+
+    result = archcheck.check(workspace, task, base)
+
+    assert result["status"] == status
+    assert bool(result["issues"]) == (status == "error")
+    assert result["violations"] == (
+        {"state": [{"target": "store", "message": "wrong state"}]} if status == "violation" else {}
+    )
+
+
 # --- other ways to break the rule than the shipped patch ------------------
 
 

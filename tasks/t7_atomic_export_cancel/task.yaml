@@ -1,0 +1,9 @@
+id: t7_atomic_export_cancel
+title: Отмена фоновой выгрузки без потери событий
+architecture:
+  source: scenario
+  rule: atomicOutbox
+  target: export-store
+expected:
+  target_rule: atomicOutbox
+  violating_targets: [export-store]
