@@ -48,6 +48,8 @@ def run_tests(workspace):
         timeout=600,
     )
     results = {}
+    if not report.exists():  # pytest died before writing a report
+        return results
     for case in ET.parse(report).getroot().iter("testcase"):
         failed = any(child.tag in {"failure", "error"} for child in case)
         results[f"{case.get('classname').split('.')[-1]}::{case.get('name')}"] = not failed
